@@ -1,0 +1,58 @@
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+
+    // koji insc?
+    And(a= instruction[15], b= true, out= insC);
+    Not(in= insC, out= insA);
+
+    // a insc logic
+    Mux16(a= outA,b= instruction, sel= insA, out= dirA);
+
+    // Alu mnemonic logic
+    Mux16(a= outA, b= inM, sel= instruction[12], out= aluY);
+    
+    //alu
+    ALU(x= outD, y= aluY, zx= instruction[11], nx= instruction[10], 
+    zy= instruction[9], ny= instruction[8], f= instruction[7],
+    no= instruction[6], out= outAlu, zr= eq, ng = ng);
+    
+    Not(in= ng, out= pos0);
+    Not(in= eq, out= Neq);
+    And(a= pos0, b= Neq, out= pos);
+
+    And(a= instruction[2], b= ng, out= j1);
+    And(a= instruction[1], b= eq, out= j2);
+    And(a= instruction[0], b= pos, out= j3); 
+    Or(a= j1, b= j2, out= j4);
+    Or(a= j3, b= j4, out= j5);
+    
+    And(a= j5, b= instruction[15], out= pcBit);
+
+    PC(in=outA, reset = reset, load = pcBit, inc = true, out[0..14] = pc);
+
+    // register bit logic    
+    And(a= instruction[5], b= insC, out= aBit);
+    And(a= instruction[4], b= insC, out= dBit);
+    And(a= instruction[3], b= insC, out= mBit, out = writeM);
+
+    //A register logic
+    Mux16(a=dirA, b = outAlu, sel=aBit, out =loadA);
+    ARegister(in= loadA, load= true, out= outA, out[0..14] = adrA, out[0..14]=addressM);
+
+    //D register
+    Mux16(a=outD, b = outAlu, sel=dBit, out =loadD);
+    DRegister(in= loadD, load= dBit, out= outD);
+
+    //Memory logic
+    Memory(in= outAlu, load= mBit, address= adrA);
+    Mux16(b= outAlu, sel= mBit, out= outM);
+}
